@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Cat Breath Monitor v2</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;600;700;900&display=swap');
+
+:root {
+  --bg: #f0ede8;
+  --surface: #e8e4dd;
+  --card: #ffffff;
+  --border: #d4cfc8;
+  --ink: #1a1612;
+  --ink2: #6b6560;
+  --accent: #c84b2f;
+  --accent2: #2f7dc8;
+  --good: #2a7a4b;
+  --warn: #c87a2f;
+  --alert: #c82f2f;
+  --good-bg: #e8f4ed;
+  --warn-bg: #fdf3e8;
+  --alert-bg: #fde8e8;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+  padding-bottom: 40px;
+}
+
+/* Grain texture */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 999;
+  opacity: 0.5;
+}
+
+.app { max-width: 680px; margin: 0 auto; padding: 16px; }
+
+/* Header */
+header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--ink);
+}
+
+.header-left h1 {
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.header-left h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.header-left p {
+  font-size: 0.7rem;
+  color: var(--ink2);
+  margin-top: 4px;
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 0.5px;
+}
+
+.ver-badge {
+  background: var(--ink);
+  color: var(--bg);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+}
+
+/* Algorithm pills */
+.algo-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.pill {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  padding: 4px 10px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border);
+  color: var(--ink2);
+  background: var(--card);
+  letter-spacing: 0.5px;
+}
+
+.pill.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #fdf0ed;
+}
+
+/* Video */
+.video-section {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  background: #111;
+  aspect-ratio: 4/3;
+  margin-bottom: 12px;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+#video { width: 100%; height: 100%; object-fit: cover; display: block; }
+#overlayCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+#canvas { display: none; }
+#prevCanvas { display: none; }
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #1a1612;
+}
+
+.placeholder-cat {
+  font-size: 3.5rem;
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.placeholder p { color: #6b6560; font-size: 0.8rem; text-align: center; }
+
+/* Live indicator */
+.live-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--ink2);
+}
+
+.live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.live-dot.on { background: var(--good); animation: blink 1.2s infinite; }
+.live-dot.warn { background: var(--warn); }
+.live-dot.err { background: var(--alert); }
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* Confidence bar */
+.conf-wrap { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.conf-label { font-size: 0.6rem; }
+.conf-bar {
+  width: 60px; height: 5px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.conf-fill {
+  height: 100%;
+  background: var(--good);
+  border-radius: 3px;
+  transition: width 0.5s, background 0.3s;
+  width: 0%;
+}
+
+/* Main metric */
+.rr-display {
+  background: var(--card);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 12px;
+  box-shadow: 3px 3px 0 var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.rr-number {
+  font-family: 'DM Mono', monospace;
+  font-size: 4rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ink);
+  transition: color 0.5s;
+  min-width: 120px;
+}
+.rr-number.good { color: var(--good); }
+.rr-number.warn { color: var(--warn); }
+.rr-number.alert { color: var(--alert); }
+
+.rr-info { flex: 1; }
+.rr-unit { font-size: 0.75rem; color: var(--ink2); margin-bottom: 8px; font-family: 'DM Mono', monospace; }
+
+.rr-assessment {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.rr-desc { font-size: 0.72rem; color: var(--ink2); line-height: 1.5; }
+
+/* Range bar */
+.range-bar {
+  position: relative;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  margin-top: 10px;
+  overflow: visible;
+}
+
+.range-normal {
+  position: absolute;
+  left: 20%;  /* 15/80 */
+  width: 20%; /* 30/80 range mapped */
+  height: 100%;
+  background: var(--good);
+  border-radius: 3px;
+  opacity: 0.3;
+}
+
+.range-marker {
+  position: absolute;
+  top: -4px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--card);
+  transform: translateX(-50%);
+  transition: left 0.5s;
+}
+
+/* Metrics row */
+.metrics-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.mini-card {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.mini-label {
+  font-size: 0.58rem;
+  color: var(--ink2);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  font-family: 'DM Mono', monospace;
+}
+
+.mini-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.mini-sub {
+  font-size: 0.6rem;
+  color: var(--ink2);
+  margin-top: 2px;
+}
+
+/* Waveform */
+.wave-card {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.wave-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.wave-title {
+  font-size: 0.65rem;
+  font-family: 'DM Mono', monospace;
+  color: var(--ink2);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.wave-info {
+  font-size: 0.6rem;
+  font-family: 'DM Mono', monospace;
+  color: var(--ink2);
+}
+
+#waveform { width: 100%; height: 90px; display: block; border-radius: 6px; }
+
+/* Validation section */
+.validate-card {
+  background: var(--warn-bg);
+  border: 1.5px solid var(--warn);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.validate-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--warn);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.validate-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.manual-input {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.3rem;
+  width: 70px;
+  text-align: center;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--card);
+  color: var(--ink);
+}
+
+.validate-desc {
+  font-size: 0.7rem;
+  color: var(--ink2);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.error-display {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.7rem;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: none;
+}
+
+.error-display.ok { background: var(--good-bg); color: var(--good); display: block; }
+.error-display.bad { background: var(--alert-bg); color: var(--alert); display: block; }
+
+/* Controls */
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+
+.btn {
+  padding: 14px 12px;
+  border-radius: 10px;
+  border: 2px solid var(--ink);
+  background: var(--card);
+  color: var(--ink);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s;
+  box-shadow: 2px 2px 0 var(--ink);
+  letter-spacing: 0.2px;
+}
+
+.btn:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); }
+.btn:active { transform: translate(1px,1px); box-shadow: 1px 1px 0 var(--ink); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: 2px 2px 0 var(--ink); }
+
+.btn.primary {
+  grid-column: 1 / -1;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.9rem;
+}
+
+.btn.primary:hover { background: #2d2922; }
+.btn.danger { border-color: var(--alert); color: var(--alert); }
+.btn.danger:hover { background: var(--alert-bg); }
+
+/* Info */
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.info-item {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.7rem;
+  color: var(--ink2);
+  line-height: 1.5;
+}
+
+.info-item strong { color: var(--ink); display: block; font-size: 0.72rem; margin-bottom: 2px; }
+
+/* Tips */
+.tips {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 0.72rem;
+  color: var(--ink2);
+  line-height: 1.7;
+  border: 1.5px solid var(--border);
+}
+.tips strong { color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <div class="header-left">
+    <h1>🐱 Cat <em>Breath</em></h1>
+    <p>OPTICAL FLOW · RESPIRATORY MONITOR</p>
+  </div>
+  <div class="ver-badge">V2.0</div>
+</header>
+
+<!-- Algorithm pills -->
+<div class="algo-pills">
+  <div class="pill active" id="pillOF">✦ Optical Flow</div>
+  <div class="pill active" id="pillBP">✦ Bandpass Filter</div>
+  <div class="pill active" id="pillFFT">✦ FFT Peak Detect</div>
+  <div class="pill" id="pillConf">○ Confidence Check</div>
+</div>
+
+<!-- Video -->
+<div class="video-section" id="videoWrap">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <canvas id="prevCanvas"></canvas>
+  <canvas id="overlayCanvas"></canvas>
+  <div class="placeholder" id="placeholder">
+    <div class="placeholder-cat">🐱</div>
+    <p>กดปุ่มเปิดกล้องด้านล่าง</p>
+  </div>
+</div>
+
+<!-- Live bar -->
+<div class="live-bar">
+  <div class="live-dot" id="liveDot"></div>
+  <span id="liveText">รอเริ่มต้น</span>
+  <div class="conf-wrap">
+    <span class="conf-label">Confidence</span>
+    <div class="conf-bar"><div class="conf-fill" id="confFill"></div></div>
+    <span id="confPct" style="font-size:0.6rem">0%</span>
+  </div>
+</div>
+
+<!-- RR Display -->
+<div class="rr-display">
+  <div>
+    <div class="rr-number" id="rrNum">--</div>
+    <div class="rr-unit">breaths/min</div>
+    <div class="range-bar">
+      <div class="range-normal" title="15–30 bpm normal"></div>
+      <div class="range-marker" id="rrMarker" style="left:0%;display:none"></div>
+    </div>
+  </div>
+  <div class="rr-info">
+    <div class="rr-assessment" id="rrAss">รอการวัด</div>
+    <div class="rr-desc" id="rrDesc">เริ่มวัดเพื่อดูผลการประเมิน</div>
+  </div>
+</div>
+
+<!-- Mini metrics -->
+<div class="metrics-row">
+  <div class="mini-card">
+    <div class="mini-label">SNR</div>
+    <div class="mini-value" id="snrVal">--</div>
+    <div class="mini-sub">signal quality</div>
+  </div>
+  <div class="mini-card">
+    <div class="mini-label">Motion</div>
+    <div class="mini-value" id="motionVal">--</div>
+    <div class="mini-sub">px/frame</div>
+  </div>
+  <div class="mini-card">
+    <div class="mini-label">Elapsed</div>
+    <div class="mini-value" id="elapsed">0s</div>
+    <div class="mini-sub">recording</div>
+  </div>
+</div>
+
+<!-- Waveform -->
+<div class="wave-card">
+  <div class="wave-header">
+    <div class="wave-title">📈 Respiratory Waveform</div>
+    <div class="wave-info" id="waveInfo">— optical flow magnitude —</div>
+  </div>
+  <canvas id="waveform"></canvas>
+</div>
+
+<!-- Validation -->
+<div class="validate-card">
+  <div class="validate-title">🔍 Validate — นับเองเพื่อเปรียบเทียบ</div>
+  <div class="validate-row">
+    <input class="manual-input" id="manualRR" type="number" min="5" max="80" placeholder="--">
+    <div class="validate-desc">
+      จับเวลา <strong>30 วินาที</strong> นับครั้งที่หน้าอกยกขึ้น<br>
+      คูณ 2 = breaths/min → ใส่ตรงนี้
+    </div>
+  </div>
+  <div class="error-display" id="errorDisplay"></div>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="btn primary" id="mainBtn" onclick="startCamera()">📷 เปิดกล้อง</button>
+  <button class="btn" id="roiBtn" onclick="pickROI()" disabled>🎯 เลือกจุด ROI</button>
+  <button class="btn danger" id="stopBtn" onclick="stopAll()" disabled>⏹ หยุด</button>
+</div>
+
+<!-- Info -->
+<div class="info-grid">
+  <div class="info-item"><strong>ค่าปกติแมว</strong>15–30 ครั้ง/นาที ขณะพัก</div>
+  <div class="info-item"><strong>เกิน 40 ครั้ง/นาที</strong>ควรพบสัตวแพทย์</div>
+  <div class="info-item"><strong>Optical Flow</strong>วัด motion ระหว่าง frame แม่นกว่า intensity</div>
+  <div class="info-item"><strong>FFT Peak</strong>หา dominant frequency ของการหายใจ</div>
+</div>
+
+<!-- Tips -->
+<div class="tips">
+  <strong>เพิ่มความแม่นยำ:</strong> วางมือถือนิ่งๆ บนขาตั้ง · แมวต้องนิ่งอย่างน้อย 15 วินาที · เลือก ROI ตรงจุดที่หน้าอกขยับชัดสุด · แสงสม่ำเสมอ ไม่กะพริบ
+</div>
+
+</div><!-- .app -->
+
+<canvas id="canvas" style="display:none"></canvas>
+<canvas id="prevCanvas" style="display:none"></canvas>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const FPS = 15;
+const BUF_SEC = 30;
+const MAX_BUF = FPS * BUF_SEC;
+const RESP_MIN_HZ = 0.15;  // 9 bpm
+const RESP_MAX_HZ = 0.9;   // 54 bpm
+const NORMAL_MIN = 15, NORMAL_MAX = 30, HIGH_THRESH = 40;
+
+// ============================================================
+// STATE
+// ============================================================
+let stream = null;
+let animId = null;
+let running = false;
+let lastSample = 0;
+let startTime = null;
+let roi = null;
+
+// Signal buffers
+let ofBuffer = [];      // optical flow magnitude
+let intBuffer = [];     // intensity (fallback)
+let timeBuffer = [];
+
+// Results
+let breathRate = null;
+let snr = 0;
+let motionMag = 0;
+let confidence = 0;
+
+// Previous frame for optical flow
+let prevGray = null;
+let frameCount = 0;
+
+// ============================================================
+// DOM
+// ============================================================
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const prevCanvas = document.getElementById('prevCanvas');
+const overlayCanvas = document.getElementById('overlayCanvas');
+const ctx = canvas.getContext('2d');
+const prevCtx = prevCanvas.getContext('2d');
+const ovCtx = overlayCanvas.getContext('2d');
+const wfCanvas = document.getElementById('waveform');
+const wfCtx = wfCanvas.getContext('2d');
+
+// ============================================================
+// CAMERA
+// ============================================================
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: {ideal:'environment'}, width:{ideal:640}, height:{ideal:480} },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('mainBtn').textContent = '▶ เริ่มวัด';
+    document.getElementById('mainBtn').onclick = startMonitor;
+    document.getElementById('roiBtn').disabled = false;
+    setLive('on', 'กล้องพร้อม — เลือก ROI หรือกด เริ่มวัด');
+    // Resize canvases
+    setTimeout(() => {
+      const w = video.videoWidth || 640, h = video.videoHeight || 480;
+      [canvas, prevCanvas].forEach(c => { c.width=w; c.height=h; });
+      overlayCanvas.width = overlayCanvas.offsetWidth;
+      overlayCanvas.height = overlayCanvas.offsetHeight;
+    }, 500);
+  } catch(e) {
+    setLive('err', 'เปิดกล้องไม่ได้: ' + e.message);
+  }
+}
+
+// ============================================================
+// ROI PICKER
+// ============================================================
+function pickROI() {
+  setLive('warn', 'แตะบนวิดีโอ — เลือกจุดหน้าอก/ท้องแมว');
+  const wrap = document.getElementById('videoWrap');
+  function onTap(e) {
+    e.preventDefault();
+    const rect = wrap.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    const px = cx - rect.left, py = cy - rect.top;
+    const vx = (px/rect.width) * (video.videoWidth||640);
+    const vy = (py/rect.height) * (video.videoHeight||480);
+    const sz = Math.min(video.videoWidth, video.videoHeight) * 0.3;
+    roi = { x:Math.max(0,vx-sz/2)|0, y:Math.max(0,vy-sz/2)|0, w:sz|0, h:sz|0 };
+    drawROIOverlay();
+    setLive('on', `ROI ตั้งที่ (${roi.x},${roi.y}) ขนาด ${roi.w}×${roi.h}px`);
+    wrap.removeEventListener('click', onTap);
+    wrap.removeEventListener('touchstart', onTap);
+  }
+  wrap.addEventListener('click', onTap);
+  wrap.addEventListener('touchstart', onTap, {passive:false});
+}
+
+function drawROIOverlay() {
+  if (!roi) return;
+  const wrap = document.getElementById('videoWrap');
+  const rect = wrap.getBoundingClientRect();
+  const vw = video.videoWidth||640, vh = video.videoHeight||480;
+  overlayCanvas.width = rect.width;
+  overlayCanvas.height = rect.height;
+  ovCtx.clearRect(0,0,rect.width,rect.height);
+  const sx = rect.width/vw, sy = rect.height/vh;
+  const bx = roi.x*sx, by = roi.y*sy, bw = roi.w*sx, bh = roi.h*sy;
+
+  // Animated dashes
+  ovCtx.strokeStyle = '#c84b2f';
+  ovCtx.lineWidth = 2;
+  ovCtx.setLineDash([6,4]);
+  ovCtx.strokeRect(bx, by, bw, bh);
+  ovCtx.setLineDash([]);
+
+  // Corner brackets
+  const cs = 12;
+  ovCtx.strokeStyle = '#c84b2f';
+  ovCtx.lineWidth = 3;
+  [[bx,by,1,1],[bx+bw,by,-1,1],[bx,by+bh,1,-1],[bx+bw,by+bh,-1,-1]].forEach(([x,y,dx,dy])=>{
+    ovCtx.beginPath();
+    ovCtx.moveTo(x+dx*cs,y); ovCtx.lineTo(x,y); ovCtx.lineTo(x,y+dy*cs);
+    ovCtx.stroke();
+  });
+
+  // Label
+  ovCtx.fillStyle = 'rgba(200,75,47,0.9)';
+  ovCtx.fillRect(bx, by-22, 80, 20);
+  ovCtx.fillStyle = '#fff';
+  ovCtx.font = '10px DM Mono, monospace';
+  ovCtx.fillText('ROI ACTIVE', bx+6, by-7);
+}
+
+// ============================================================
+// MONITORING
+// ============================================================
+function startMonitor() {
+  if (!stream) return;
+  running = true;
+  ofBuffer = []; intBuffer = []; timeBuffer = [];
+  prevGray = null; frameCount = 0;
+  startTime = performance.now();
+  document.getElementById('mainBtn').disabled = true;
+  document.getElementById('stopBtn').disabled = false;
+  document.getElementById('roiBtn').disabled = true;
+  document.getElementById('pillConf').classList.add('active');
+  setLive('on', 'กำลังวัด — กรุณาให้แมวอยู่นิ่ง');
+  loop();
+}
+
+function loop() {
+  if (!running) return;
+  animId = requestAnimationFrame(loop);
+  const now = performance.now();
+  if (now - lastSample < 1000/FPS) return;
+  lastSample = now;
+  processFrame(now);
+  frameCount++;
+
+  // Update elapsed
+  const sec = Math.round((now - startTime)/1000);
+  document.getElementById('elapsed').textContent = sec + 's';
+
+  // Compute rate after 8s
+  if (ofBuffer.length >= FPS*8) computeRespRate();
+
+  drawWaveform();
+  updateUI();
+  if (roi) drawROIOverlay();
+}
+
+// ============================================================
+// OPTICAL FLOW (Lucas-Kanade approximation via pixel diff)
+// ============================================================
+function processFrame(t) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw) return;
+  canvas.width = vw; canvas.height = vh;
+  ctx.drawImage(video, 0, 0);
+
+  const r = roi || { x: (vw*0.25)|0, y: (vh*0.25)|0, w: (vw*0.5)|0, h: (vh*0.5)|0 };
+
+  // Get current gray
+  const imgData = ctx.getImageData(r.x, r.y, r.w, r.h);
+  const gray = toGray(imgData.data, r.w, r.h);
+
+  // Intensity signal (always)
+  const mean = gray.reduce((a,b)=>a+b,0)/gray.length;
+  intBuffer.push(mean);
+
+  // Optical flow if we have prev frame
+  if (prevGray && prevGray.length === gray.length) {
+    const flow = computeFlow(prevGray, gray, r.w, r.h);
+    ofBuffer.push(flow.mag);
+    motionMag = flow.mag;
+  } else {
+    ofBuffer.push(0);
+  }
+
+  if (ofBuffer.length > MAX_BUF) { ofBuffer.shift(); intBuffer.shift(); }
+  timeBuffer.push(t);
+  if (timeBuffer.length > MAX_BUF) timeBuffer.shift();
+
+  // Store prev
+  prevCanvas.width = vw; prevCanvas.height = vh;
+  prevCtx.drawImage(video, 0, 0);
+  prevGray = gray;
+}
+
+function toGray(data, w, h) {
+  const g = new Float32Array(w*h);
+  for (let i=0;i<w*h;i++) {
+    g[i] = 0.299*data[i*4] + 0.587*data[i*4+1] + 0.114*data[i*4+2];
+  }
+  return g;
+}
+
+// Simplified optical flow: gradient-based motion magnitude
+function computeFlow(prev, curr, w, h) {
+  let sumMag = 0, count = 0;
+  // Sample grid points
+  const step = 4;
+  for (let y=step; y<h-step; y+=step) {
+    for (let x=step; x<w-step; x+=step) {
+      const idx = y*w+x;
+      // Spatial gradient
+      const Ix = (curr[idx+1] - curr[idx-1]) / 2;
+      const Iy = (curr[(y+1)*w+x] - curr[(y-1)*w+x]) / 2;
+      // Temporal gradient
+      const It = curr[idx] - prev[idx];
+      // Optical flow magnitude approximation
+      const denom = Ix*Ix + Iy*Iy + 0.001;
+      const vx = -Ix*It/denom;
+      const vy = -Iy*It/denom;
+      const mag = Math.sqrt(vx*vx+vy*vy);
+      if (mag < 20) { sumMag += mag; count++; } // ignore large motion (cat moved)
+    }
+  }
+  return { mag: count>0 ? sumMag/count : 0 };
+}
+
+// ============================================================
+// RATE COMPUTATION — FFT-based
+// ============================================================
+function computeRespRate() {
+  const sig = [...ofBuffer];
+  const n = sig.length;
+
+  // Use OF if motion detected, else fallback to intensity
+  const useOf = sig.reduce((a,b)=>a+b,0)/n > 0.01;
+  const raw = useOf ? sig : [...intBuffer];
+
+  // Detrend
+  const det = detrend(raw);
+
+  // Hanning window
+  const windowed = det.map((v,i) => v * (0.5 - 0.5*Math.cos(2*Math.PI*i/(n-1))));
+
+  // FFT (DFT for simplicity, padded)
+  const fftSize = nextPow2(windowed.length);
+  const padded = [...windowed, ...new Array(fftSize - windowed.length).fill(0)];
+  const spectrum = dft(padded);
+
+  // Find peak in respiratory band
+  const freqRes = FPS / fftSize;
+  const minBin = Math.floor(RESP_MIN_HZ / freqRes);
+  const maxBin = Math.ceil(RESP_MAX_HZ / freqRes);
+
+  let peakBin = minBin, peakPow = 0, totalPow = 0;
+  for (let i=minBin; i<=Math.min(maxBin, spectrum.length/2); i++) {
+    const p = spectrum[i];
+    totalPow += p;
+    if (p > peakPow) { peakPow = p; peakBin = i; }
+  }
+
+  const peakFreq = peakBin * freqRes;
+  breathRate = Math.round(peakFreq * 60);
+
+  // SNR
+  const bandPow = spectrum.slice(minBin, maxBin+1).reduce((a,b)=>a+b,0);
+  const noisePow = totalPow - bandPow + 0.001;
+  snr = Math.min(99, Math.round(10 * Math.log10(bandPow/noisePow + 1)));
+
+  // Confidence: based on SNR + motion consistency
+  const motionConsistency = motionMag > 0.05 ? 1 : 0.5;
+  confidence = Math.min(100, Math.round((snr/20)*70 + motionConsistency*30));
+  if (breathRate < 5 || breathRate > 80) { breathRate = null; confidence = 0; }
+}
+
+// ============================================================
+// MATH UTILS
+// ============================================================
+function detrend(arr) {
+  const n = arr.length;
+  const xm = (n-1)/2;
+  const ym = arr.reduce((a,b)=>a+b,0)/n;
+  let num=0, den=0;
+  arr.forEach((v,i) => { num+=(i-xm)*(v-ym); den+=(i-xm)**2; });
+  const slope = den ? num/den : 0;
+  return arr.map((v,i) => v - (slope*(i-xm)+ym));
+}
+
+function nextPow2(n) { let p=1; while(p<n) p*=2; return p; }
+
+function dft(x) {
+  // Real FFT power spectrum (Cooley-Tukey iterative)
+  const N = x.length;
+  const re = new Float64Array(x);
+  const im = new Float64Array(N);
+  // Bit-reversal
+  for (let i=1,j=0; i<N; i++) {
+    let bit = N>>1;
+    for (; j&bit; bit>>=1) j^=bit;
+    j^=bit;
+    if (i<j) { [re[i],re[j]]=[re[j],re[i]]; [im[i],im[j]]=[im[j],im[i]]; }
+  }
+  // FFT
+  for (let len=2; len<=N; len<<=1) {
+    const ang = -2*Math.PI/len;
+    const wr=Math.cos(ang), wi=Math.sin(ang);
+    for (let i=0; i<N; i+=len) {
+      let cr=1, ci=0;
+      for (let j=0; j<len/2; j++) {
+        const ur=re[i+j], ui=im[i+j];
+        const vr=re[i+j+len/2]*cr-im[i+j+len/2]*ci;
+        const vi=re[i+j+len/2]*ci+im[i+j+len/2]*cr;
+        re[i+j]=ur+vr; im[i+j]=ui+vi;
+        re[i+j+len/2]=ur-vr; im[i+j+len/2]=ui-vi;
+        const ncr=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=ncr;
+      }
+    }
+  }
+  // Power spectrum
+  return Array.from({length:N/2}, (_,i) => re[i]**2+im[i]**2);
+}
+
+// ============================================================
+// WAVEFORM DRAWING
+// ============================================================
+function drawWaveform() {
+  const W = wfCanvas.offsetWidth||300, H = 90;
+  wfCanvas.width = W; wfCanvas.height = H;
+  wfCtx.clearRect(0,0,W,H);
+
+  const buf = ofBuffer.length > 10 ? ofBuffer : intBuffer;
+  if (buf.length < 3) return;
+
+  const show = Math.min(buf.length, FPS*20);
+  const seg = buf.slice(-show);
+
+  // Detrend for display
+  const det = detrend(seg);
+  const mn = Math.min(...det), mx = Math.max(...det);
+  const range = mx-mn || 1;
+
+  // Grid lines
+  wfCtx.strokeStyle = 'rgba(180,170,160,0.4)';
+  wfCtx.lineWidth = 1;
+  [0.25,0.5,0.75].forEach(f => {
+    const y = H*f;
+    wfCtx.beginPath(); wfCtx.moveTo(0,y); wfCtx.lineTo(W,y); wfCtx.stroke();
+  });
+
+  // Signal fill
+  wfCtx.beginPath();
+  det.forEach((v,i) => {
+    const x = i/(seg.length-1)*W;
+    const y = H - ((v-mn)/range)*(H*0.8) - H*0.1;
+    i===0 ? wfCtx.moveTo(x,y) : wfCtx.lineTo(x,y);
+  });
+  wfCtx.lineTo(W,H); wfCtx.lineTo(0,H); wfCtx.closePath();
+  wfCtx.fillStyle = 'rgba(42,122,75,0.12)';
+  wfCtx.fill();
+
+  // Signal line
+  wfCtx.beginPath();
+  det.forEach((v,i) => {
+    const x = i/(seg.length-1)*W;
+    const y = H - ((v-mn)/range)*(H*0.8) - H*0.1;
+    i===0 ? wfCtx.moveTo(x,y) : wfCtx.lineTo(x,y);
+  });
+  wfCtx.strokeStyle = '#2a7a4b';
+  wfCtx.lineWidth = 2;
+  wfCtx.stroke();
+}
+
+// ============================================================
+// UI UPDATE
+// ============================================================
+function updateUI() {
+  // Confidence
+  const cf = document.getElementById('confFill');
+  cf.style.width = confidence + '%';
+  cf.style.background = confidence>70?'#2a7a4b':confidence>40?'#c87a2f':'#c82f2f';
+  document.getElementById('confPct').textContent = confidence + '%';
+
+  // Motion
+  document.getElementById('motionVal').textContent = motionMag.toFixed(2);
+  document.getElementById('snrVal').textContent = snr > 0 ? snr + 'dB' : '--';
+
+  // Validate
+  const manual = parseInt(document.getElementById('manualRR').value);
+  const errEl = document.getElementById('errorDisplay');
+  if (breathRate && !isNaN(manual) && manual > 0) {
+    const diff = Math.abs(breathRate - manual);
+    const pct = Math.round(diff/manual*100);
+    if (diff <= 3) {
+      errEl.className = 'error-display ok';
+      errEl.textContent = `✓ ใกล้เคียงมาก — ต่างกัน ${diff} ครั้ง (${pct}%) ระบบทำงานดี`;
+    } else {
+      errEl.className = 'error-display bad';
+      errEl.textContent = `✗ ต่างกัน ${diff} ครั้ง (${pct}%) — ลองปรับ ROI ให้ตรงหน้าอก`;
+    }
+  }
+
+  if (!breathRate) {
+    document.getElementById('rrNum').textContent = '--';
+    document.getElementById('rrNum').className = 'rr-number';
+    document.getElementById('rrAss').textContent = 'กำลังรวบรวมข้อมูล...';
+    document.getElementById('rrDesc').textContent = `ต้องการข้อมูลอย่างน้อย 8 วินาที (${ofBuffer.length}/${FPS*8} samples)`;
+    document.getElementById('rrMarker').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('rrNum').textContent = breathRate;
+  document.getElementById('rrMarker').style.display = 'block';
+  // Map bpm to bar position (0=5bpm, 100%=65bpm)
+  const pct = Math.max(0, Math.min(100, (breathRate-5)/60*100));
+  document.getElementById('rrMarker').style.left = pct + '%';
+
+  let cls, ass, desc;
+  if (breathRate < NORMAL_MIN) {
+    cls='warn'; ass='⚠️ ช้ากว่าปกติ';
+    desc=`${breathRate} ครั้ง/นาที — ต่ำกว่าปกติ (15–30) อาจเป็นเพราะแมวหลับลึก`;
+  } else if (breathRate <= NORMAL_MAX) {
+    cls='good'; ass='✅ ปกติ';
+    desc=`${breathRate} ครั้ง/นาที — อยู่ในช่วงปกติของแมวขณะพัก`;
+  } else if (breathRate <= HIGH_THRESH) {
+    cls='warn'; ass='⚠️ เร็วกว่าปกติ';
+    desc=`${breathRate} ครั้ง/นาที — สูงกว่าปกติ อาจเป็นเพราะร้อน/เครียด/ตื่นเต้น`;
+  } else {
+    cls='alert'; ass='🚨 สูงมาก';
+    desc=`${breathRate} ครั้ง/นาที — เกิน 40 ครั้ง/นาที ควรปรึกษาสัตวแพทย์`;
+  }
+
+  document.getElementById('rrNum').className = 'rr-number ' + cls;
+  document.getElementById('rrAss').textContent = ass;
+  document.getElementById('rrDesc').textContent = desc;
+  document.getElementById('waveInfo').textContent =
+    `optical flow · ${FPS}fps · SNR ${snr}dB · conf ${confidence}%`;
+}
+
+function setLive(type, text) {
+  document.getElementById('liveDot').className = 'live-dot ' + type;
+  document.getElementById('liveText').textContent = text;
+}
+
+// ============================================================
+// STOP
+// ============================================================
+function stopAll() {
+  running = false;
+  if (animId) cancelAnimationFrame(animId);
+  if (stream) { stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  document.getElementById('placeholder').style.display='flex';
+  ovCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
+  document.getElementById('mainBtn').disabled=false;
+  document.getElementById('mainBtn').textContent='📷 เปิดกล้อง';
+  document.getElementById('mainBtn').onclick=startCamera;
+  document.getElementById('stopBtn').disabled=true;
+  document.getElementById('roiBtn').disabled=true;
+  setLive('', 'หยุดการวัดแล้ว');
+}
+
+// Validate on input
+document.getElementById('manualRR').addEventListener('input', updateUI);
+window.addEventListener('resize', () => { if(running) drawWaveform(); });
+</script>
+</body>
+</html>
